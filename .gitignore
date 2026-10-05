@@ -1,0 +1,25 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+.env
+credentials/*.json
+!credentials/.gitkeep
+
+*.log
+
+# Personal / local-only files (added before publishing)
+BUDGET-TRACKER.xlsx
+*.xlsx
+*.stackdump
+.claude/
+*.egg-info/
+
+# Network-specific CA certificates (BPS TLS inspection) — local only
+docker/certs/*
+!docker/certs/.gitkeep
