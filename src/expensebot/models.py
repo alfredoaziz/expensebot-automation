@@ -60,6 +60,10 @@ class ExpenseRecord(BaseModel):
     # working: recap.py treats a blank/missing Tipe the same way.
     tipe: Literal["Pengeluaran", "Pemasukan"] = TIPE_PENGELUARAN
 
+    # "HH:MM" WIB of the transaction itself when known (bank emails carry
+    # it); None falls back to the time the row is saved.
+    waktu: str | None = None
+
     sumber: str = "Foto"
     drive_link: str | None = None
     dedupe_key: str | None = None

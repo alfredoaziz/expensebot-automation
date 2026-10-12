@@ -6,7 +6,12 @@ from expensebot.llm.schema import LlmExtractionResult
 
 def test_kategori_pengeluaran_tidak_dikenal_dinormalisasi():
     # Arrange
-    payload = {"valid": True, "merchant": "Toko A", "kategori": "Kategori Aneh", "total": 1000}
+    payload = {
+        "valid": True,
+        "merchant": "Toko A",
+        "kategori": "Kategori Aneh",
+        "total": 1000,
+    }
 
     # Act
     result = LlmExtractionResult.model_validate(payload)

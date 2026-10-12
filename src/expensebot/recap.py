@@ -46,7 +46,9 @@ def _period_start(today: dt.date, period: str) -> dt.date:
     raise ValueError(f"Periode tidak dikenal: {period}")
 
 
-def summarize(rows: list[dict], period: str, today: dt.date | None = None) -> RecapResult:
+def summarize(
+    rows: list[dict], period: str, today: dt.date | None = None
+) -> RecapResult:
     today = today or dt.date.today()
     start = _period_start(today, period)
 

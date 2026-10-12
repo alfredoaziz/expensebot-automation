@@ -91,6 +91,7 @@ Bot:  📊 Rekap Keuangan — Agustus 2026
 
 ## Key features
 
+- 📧 **V2, hands-free from Gmail:** mobile-banking notification emails (BSI BYOND, blu by BCA Digital) are read automatically, saved to the sheet, and reported to Telegram as they arrive. There is nothing to upload
 - 📸 **Multi-format input:** camera photos, scanned PDFs (multi-page), mobile-banking and e-wallet transfer receipts
 - 🧠 **Local, private AI:** inference runs on your own GPU or CPU through Ollama. No OpenAI or Gemini API keys and no per-request cost
 - 💸 **Income vs. expense detection:** for bank transfers, the configured account-holder name tells the bot which way the money moved (`Rekening Sumber` vs `Nama Penerima`)
@@ -132,6 +133,20 @@ docker compose logs -f expensebot
 
 Full step-by-step setup (BotFather, Google Cloud OAuth, Sheet/Drive IDs, GPU, running 24/7): **[docs/setup-and-deployment.md](docs/setup-and-deployment.md)**
 
+### V2: automatic recording from Gmail
+
+1. In Google Cloud Console, **enable the Gmail API** for the same project (APIs & Services → Library → Gmail API → Enable). On the OAuth consent screen, add the scope `.../auth/gmail.readonly`.
+2. Re-run `python scripts/authorize_google.py` on the host and approve the new Gmail permission. The bot only asks for **read-only** Gmail access: it never sends, labels or deletes mail.
+3. Set `ACCOUNT_HOLDER_NAME` in `.env`. It lets the bot recognise transfers between your own accounts (e.g. BSI → blu), which are reported but not recorded so totals aren't counted twice.
+4. Run `docker compose up -d --build`, then preview the parsing without writing anything:
+   `docker compose exec expensebot python scripts/gmail_dry_run.py --limit 10`
+
+The bot polls Gmail every `GMAIL_POLL_INTERVAL_SECONDS` (default 60 s) using `GMAIL_QUERY`. Each new transaction:
+- is saved to the month's tab, with Sumber = `Email BSI`/`Email blu` and a link back to the email
+- triggers a Telegram message: 💸 Uang Keluar / 💰 Uang Masuk, with the amount, counterparty and category
+
+Amounts, dates and counterparties are parsed **deterministically** from the bank templates, and the local LLM only picks the category. Senders without a parser fall back to full LLM extraction. Already-handled email IDs are remembered in the `expensebot_data` volume, and the sheet's dedupe key guards against double rows.
+
 ## Documentation
 
 | Doc | Contents |
@@ -152,7 +167,14 @@ src/expensebot/
 ├── models.py               # ExpenseRecord / ExpenseItem + category taxonomy
 ├── telegram/
 │   ├── handlers.py         # Photo/PDF ingestion pipeline, /start, /rekap, global error handler
+│   ├── gmail_job.py        # V2: background Gmail polling loop → Telegram reports
 │   └── formatting.py       # Indonesian-language message formatting, Rupiah formatting
+├── gmail/                  # V2: bank notification emails → sheet rows
+│   ├── client.py           # Read-only Gmail API access (list/get, MIME decoding)
+│   ├── html_text.py        # Email HTML → label/value text lines
+│   ├── parsers.py          # Deterministic BSI BYOND + blu parsers (amount, date, counterparty)
+│   ├── ingest.py           # Poll → parse → categorize → dedupe → append
+│   └── state.py            # Processed-email-ID store (JSON on a Docker volume)
 ├── llm/
 │   ├── client.py           # Ollama client (OpenAI SDK), parse + one self-correcting retry
 │   ├── prompts.py          # System prompt (extraction rules, Rupiah normalization)

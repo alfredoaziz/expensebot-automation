@@ -16,7 +16,9 @@ def test_format_confirmation_menampilkan_tanggal_dan_total():
         tanggal=dt.date(2026, 8, 19),
         merchant="Warung Bu Siti",
         kategori="Makan & Minum",
-        items=[ExpenseItem(nama="Nasi Goreng", qty=1, harga_satuan=20000, subtotal=20000)],
+        items=[
+            ExpenseItem(nama="Nasi Goreng", qty=1, harga_satuan=20000, subtotal=20000)
+        ],
         total=20000,
     )
 
@@ -51,7 +53,11 @@ def test_format_confirmation_pemasukan_ditandai_berbeda():
 def test_format_confirmation_tanggal_kosong_ditandai():
     # Arrange
     record = ExpenseRecord(
-        tanggal=None, merchant="Toko X", kategori="Lainnya", total=5000, butuh_konfirmasi=True
+        tanggal=None,
+        merchant="Toko X",
+        kategori="Lainnya",
+        total=5000,
+        butuh_konfirmasi=True,
     )
 
     # Act
@@ -107,7 +113,10 @@ def test_format_recap_tahunan_menampilkan_total_dan_per_bulan():
     # Arrange
     result = RekapTahunanResult(
         tahun=2026,
-        per_bulan=[("2026-08", 9121597, 13091935, -3970338), ("2026-09", 3509900, 0, 3509900)],
+        per_bulan=[
+            ("2026-08", 9121597, 13091935, -3970338),
+            ("2026-09", 3509900, 0, 3509900),
+        ],
         total_pemasukan=12631497,
         total_pengeluaran=13091935,
     )

@@ -10,10 +10,32 @@ import logging
 from openai import APIError, OpenAI
 from pydantic import ValidationError
 
-from expensebot.llm.prompts import RETRY_PROMPT, USER_PROMPT, build_system_prompt
+from expensebot.llm.prompts import (
+    EMAIL_USER_PROMPT,
+    RETRY_PROMPT,
+    USER_PROMPT,
+    build_category_prompt,
+    build_system_prompt,
+)
 from expensebot.llm.schema import LlmExtractionResult
+from expensebot.models import KATEGORI_PEMASUKAN, KATEGORI_PENGELUARAN, TIPE_PEMASUKAN
 
 logger = logging.getLogger(__name__)
+
+# Bank notification bodies are short; this only guards against a huge
+# HTML-to-text dump eating the small model's context window.
+_MAX_EMAIL_CHARS = 6000
+
+
+def match_kategori(reply: str, daftar: list[str]) -> str | None:
+    """Maps a free-text model reply onto one of `daftar` — exact match
+    first, then the longest category name the reply contains."""
+    cleaned = reply.strip().strip("\"'`.").casefold()
+    for kategori in daftar:
+        if cleaned == kategori.casefold():
+            return kategori
+    contained = [k for k in daftar if k.casefold() in cleaned]
+    return max(contained, key=len) if contained else None
 
 
 class ExtractionFailedError(Exception):
@@ -65,6 +87,28 @@ class OllamaClient:
         user_content = [{"type": "text", "text": USER_PROMPT}] + [
             _image_content(image) for image in images
         ]
+        return self._extract(user_content)
+
+    def extract_expense_from_text(self, text: str) -> LlmExtractionResult:
+        """Same extraction as extract_expense, for an email body instead of
+        an image — used for bank emails that have no dedicated parser."""
+        return self._extract(EMAIL_USER_PROMPT + text[:_MAX_EMAIL_CHARS])
+
+    def categorize(self, tipe: str, deskripsi: str) -> str:
+        """Picks one category for an already-parsed transaction. Always
+        returns a valid category for `tipe` — an unexpected reply falls back
+        to the catch-all one. Raises LLMUnavailableError if Ollama is down."""
+        if tipe == TIPE_PEMASUKAN:
+            daftar, fallback = KATEGORI_PEMASUKAN, "Pemasukan Lainnya"
+        else:
+            daftar, fallback = KATEGORI_PENGELUARAN, "Lain-lain / Tak Terduga"
+        messages = [
+            {"role": "system", "content": build_category_prompt(daftar)},
+            {"role": "user", "content": deskripsi[:_MAX_EMAIL_CHARS]},
+        ]
+        return match_kategori(self._complete(messages), daftar) or fallback
+
+    def _extract(self, user_content: str | list[dict]) -> LlmExtractionResult:
         messages = [
             {"role": "system", "content": self._system_prompt},
             {"role": "user", "content": user_content},
@@ -83,7 +127,9 @@ class OllamaClient:
         if result is not None:
             return result
 
-        raise ExtractionFailedError(f"LLM never returned valid JSON. Last output: {raw!r}")
+        raise ExtractionFailedError(
+            f"LLM never returned valid JSON. Last output: {raw!r}"
+        )
 
     def _complete(self, messages: list[dict]) -> str:
         try:

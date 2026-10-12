@@ -20,7 +20,9 @@ class DriveRepository:
         self, file_bytes: bytes, filename: str, mime_type: str, year: int, month: int
     ) -> str:
         folder_id = self._ensure_month_folder(year, month)
-        media = MediaIoBaseUpload(io.BytesIO(file_bytes), mimetype=mime_type, resumable=False)
+        media = MediaIoBaseUpload(
+            io.BytesIO(file_bytes), mimetype=mime_type, resumable=False
+        )
         metadata = {"name": filename, "parents": [folder_id]}
         created = (
             self._service.files()
@@ -42,7 +44,9 @@ class DriveRepository:
             f"'{parent_id}' in parents and name = '{name}' "
             "and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
         )
-        results = self._service.files().list(q=query, fields="files(id, name)").execute()
+        results = (
+            self._service.files().list(q=query, fields="files(id, name)").execute()
+        )
         files = results.get("files", [])
         if files:
             folder_id = files[0]["id"]
@@ -52,7 +56,9 @@ class DriveRepository:
                 "mimeType": "application/vnd.google-apps.folder",
                 "parents": [parent_id],
             }
-            folder_id = self._service.files().create(body=metadata, fields="id").execute()["id"]
+            folder_id = (
+                self._service.files().create(body=metadata, fields="id").execute()["id"]
+            )
 
         self._folder_cache[cache_key] = folder_id
         return folder_id

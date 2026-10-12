@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from expensebot.gmail.ingest import IngestOutcome, IngestStatus
 from expensebot.models import TIPE_PEMASUKAN, ExpenseRecord
 from expensebot.recap import PERIODS, RecapResult, RekapTahunanResult
 
 PERIOD_LABELS = {"harian": "Hari Ini", "mingguan": "Minggu Ini", "bulanan": "Bulan Ini"}
-assert set(PERIOD_LABELS) == set(PERIODS)  # noqa: S101 — keeps the two lists from drifting apart
+assert set(PERIOD_LABELS) == set(
+    PERIODS
+)  # noqa: S101 — keeps the two lists from drifting apart
 
 NAMA_BULAN = {
     1: "Januari",
@@ -25,7 +28,7 @@ NAMA_BULAN = {
 
 
 def format_bulan_label(bulan_yyyymm: str) -> str:
-    """"2026-08" -> "Agustus 2026"; falls back to the raw string if it
+    """ "2026-08" -> "Agustus 2026"; falls back to the raw string if it
     doesn't parse (defensive — Rekap Tahunan always writes "yyyy-mm")."""
     try:
         year_str, month_str = bulan_yyyymm.split("-", 1)
@@ -40,7 +43,9 @@ def _rupiah(value: float) -> str:
 
 
 def format_confirmation(record: ExpenseRecord) -> str:
-    tanggal = record.tanggal.strftime("%d %b %Y") if record.tanggal else "❓ tidak terbaca"
+    tanggal = (
+        record.tanggal.strftime("%d %b %Y") if record.tanggal else "❓ tidak terbaca"
+    )
     is_pemasukan = record.tipe == TIPE_PEMASUKAN
     lines = [
         "💰 Konfirmasi Pemasukan" if is_pemasukan else "🧾 Konfirmasi Pengeluaran",
@@ -60,6 +65,58 @@ def format_confirmation(record: ExpenseRecord) -> str:
     return "\n".join(lines)
 
 
+def _email_header_lines(outcome: IngestOutcome) -> list[str]:
+    record = outcome.record
+    is_masuk = record.tipe == TIPE_PEMASUKAN
+    tanggal = record.tanggal.strftime("%d %b %Y") if record.tanggal else "-"
+    return [
+        f"Tanggal: {tanggal} {record.waktu or ''}".rstrip(),
+        f"{'Dari' if is_masuk else 'Ke'}: {record.merchant}",
+        f"Nominal: {_rupiah(record.total)}",
+    ]
+
+
+def format_email_report(outcome: IngestOutcome) -> str | None:
+    """Telegram message for one processed bank email, or None when the
+    email needs no report (promo/non-transaction, already recorded)."""
+    if outcome.status == IngestStatus.GAGAL:
+        subject = outcome.message.subject if outcome.message else outcome.message_id
+        return (
+            f"⚠️ Email transaksi gagal diproses ({subject}) — {outcome.error}. "
+            "Akan dicoba lagi otomatis tiap polling; cek `docker compose logs expensebot` "
+            "kalau terus muncul."
+        )
+    if outcome.record is None or outcome.status not in (
+        IngestStatus.TERCATAT,
+        IngestStatus.TRANSFER_SENDIRI,
+    ):
+        return None
+
+    record = outcome.record
+    if outcome.status == IngestStatus.TRANSFER_SENDIRI:
+        arah = "masuk ke" if record.tipe == TIPE_PEMASUKAN else "keluar dari"
+        return "\n".join(
+            [
+                f"🔁 Transfer antar rekening sendiri ({arah} {outcome.bank})",
+                *_email_header_lines(outcome),
+                "",
+                "ℹ️ Tidak dicatat sebagai pemasukan/pengeluaran supaya saldo tidak dobel.",
+            ]
+        )
+
+    is_masuk = record.tipe == TIPE_PEMASUKAN
+    lines = [
+        f"{'💰 Uang Masuk' if is_masuk else '💸 Uang Keluar'} — {outcome.bank}",
+        *_email_header_lines(outcome),
+        f"Kategori: {record.kategori}",
+    ]
+    if record.catatan:
+        lines.append(f"Catatan: {record.catatan}")
+    lines.append("")
+    lines.append("✅ Tercatat otomatis dari email.")
+    return "\n".join(lines)
+
+
 def format_recap(period: str, result: RecapResult) -> str:
     label = PERIOD_LABELS.get(period, period)
     lines = [
@@ -72,12 +129,16 @@ def format_recap(period: str, result: RecapResult) -> str:
     if result.per_kategori_pemasukan:
         lines.append("")
         lines.append("Pemasukan per kategori:")
-        for kategori, total in sorted(result.per_kategori_pemasukan.items(), key=lambda kv: -kv[1]):
+        for kategori, total in sorted(
+            result.per_kategori_pemasukan.items(), key=lambda kv: -kv[1]
+        ):
             lines.append(f"  • {kategori}: {_rupiah(total)}")
     if result.per_kategori:
         lines.append("")
         lines.append("Pengeluaran per kategori:")
-        for kategori, total in sorted(result.per_kategori.items(), key=lambda kv: -kv[1]):
+        for kategori, total in sorted(
+            result.per_kategori.items(), key=lambda kv: -kv[1]
+        ):
             lines.append(f"  • {kategori}: {_rupiah(total)}")
     return "\n".join(lines)
 

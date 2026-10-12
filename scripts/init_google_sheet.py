@@ -22,7 +22,9 @@ def main() -> None:
     credentials = load_credentials(settings.google_credentials_dir)
     sheets_repo = SheetsRepository(credentials, settings.google_spreadsheet_id)
     sheets_repo.ensure_structure()
-    print("Struktur Google Sheet siap (tab Transaksi bulanan + Rekap Tahunan + Dashboard).")
+    print(
+        "Struktur Google Sheet siap (tab Transaksi bulanan + Rekap Tahunan + Dashboard)."
+    )
 
 
 if __name__ == "__main__":

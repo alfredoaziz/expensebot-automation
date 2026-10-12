@@ -15,7 +15,11 @@ def test_llm_items_convert_cleanly_into_expense_record():
         valid=True,
         merchant="Warung Bu Siti",
         kategori="Makan & Minum",
-        items=[LlmExpenseItem(nama="Nasi Goreng", qty=2, harga_satuan=20000, subtotal=40000)],
+        items=[
+            LlmExpenseItem(
+                nama="Nasi Goreng", qty=2, harga_satuan=20000, subtotal=40000
+            )
+        ],
         total=40000,
     )
 

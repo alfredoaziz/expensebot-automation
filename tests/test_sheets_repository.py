@@ -94,7 +94,9 @@ class FakeSpreadsheet:
         except KeyError:
             raise gspread.WorksheetNotFound(title) from None
 
-    def add_worksheet(self, title: str, rows: int = 1000, cols: int = 10) -> FakeWorksheet:
+    def add_worksheet(
+        self, title: str, rows: int = 1000, cols: int = 10
+    ) -> FakeWorksheet:
         worksheet = FakeWorksheet(title, cols=cols)
         self._sheets[title] = worksheet
         return worksheet
@@ -112,7 +114,9 @@ def _make_repo() -> tuple[SheetsRepository, FakeSpreadsheet]:
     return repo, fake
 
 
-def _expense(tanggal: dt.date, total: float = 10000, tipe: str = "Pengeluaran") -> ExpenseRecord:
+def _expense(
+    tanggal: dt.date, total: float = 10000, tipe: str = "Pengeluaran"
+) -> ExpenseRecord:
     return ExpenseRecord(
         tanggal=tanggal,
         merchant="Warung Bu Siti",
@@ -306,10 +310,34 @@ def test_migrasi_tab_transaksi_lama_dipecah_per_bulan(frozen_now):
     legacy = fake.add_worksheet("Transaksi")
     legacy.append_row(TRANSAKSI_HEADER)
     legacy.append_row(
-        ["2026-07-05", "10:00", "Makan & Minum", "Toko A", "Item", 15000, "Foto", "", "", "", "k1"]
+        [
+            "2026-07-05",
+            "10:00",
+            "Makan & Minum",
+            "Toko A",
+            "Item",
+            15000,
+            "Foto",
+            "",
+            "",
+            "",
+            "k1",
+        ]
     )
     legacy.append_row(
-        ["2026-08-12", "11:00", "Transportasi", "Toko B", "Item", 20000, "Foto", "", "", "", "k2"]
+        [
+            "2026-08-12",
+            "11:00",
+            "Transportasi",
+            "Toko B",
+            "Item",
+            20000,
+            "Foto",
+            "",
+            "",
+            "",
+            "k2",
+        ]
     )
 
     # Act

@@ -34,8 +34,11 @@ services:
       - .env
     volumes:
       - ./credentials:/app/credentials:ro
+      # Remembers which bank emails were already reported (V2 Gmail).
+      - expensebot_data:/app/data
     security_opt:
       - no-new-privileges:true
 
 volumes:
   ollama_data:
+  expensebot_data:

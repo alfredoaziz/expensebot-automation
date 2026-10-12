@@ -125,7 +125,9 @@ def _kategori_bulan_terpilih_formula(tipe_where: str) -> str:
 _PENGELUARAN_KATEGORI_FORMULA = _kategori_bulan_terpilih_formula(
     f"J = '{TIPE_PENGELUARAN}' or J = ''"
 )
-_PEMASUKAN_KATEGORI_FORMULA = _kategori_bulan_terpilih_formula(f"J = '{TIPE_PEMASUKAN}'")
+_PEMASUKAN_KATEGORI_FORMULA = _kategori_bulan_terpilih_formula(
+    f"J = '{TIPE_PEMASUKAN}'"
+)
 
 # Dashboard row layout (0-indexed, matches the Sheets API). Row 0 (sheet
 # row 1) holds the month-selector cell (_MONTH_CELL). Each QUERY above
@@ -135,7 +137,9 @@ _PEMASUKAN_KATEGORI_FORMULA = _kategori_bulan_terpilih_formula(f"J = '{TIPE_PEMA
 _BALANCE_START_ROW = 8  # row 9: "Pemasukan" | =B5 ; row 10: "Pengeluaran" | =B4
 _BALANCE_END_ROW = 10
 _PENGELUARAN_KATEGORI_START_ROW = 12  # row 13
-_PENGELUARAN_KATEGORI_END_ROW = _PENGELUARAN_KATEGORI_START_ROW + len(KATEGORI_PENGELUARAN)
+_PENGELUARAN_KATEGORI_END_ROW = _PENGELUARAN_KATEGORI_START_ROW + len(
+    KATEGORI_PENGELUARAN
+)
 _PEMASUKAN_KATEGORI_LABEL_ROW = _PENGELUARAN_KATEGORI_END_ROW + 1  # one blank row after
 _PEMASUKAN_KATEGORI_START_ROW = _PEMASUKAN_KATEGORI_LABEL_ROW + 1
 _PEMASUKAN_KATEGORI_END_ROW = _PEMASUKAN_KATEGORI_START_ROW + len(KATEGORI_PEMASUKAN)
@@ -188,8 +192,12 @@ def _pie_chart_request(
 
 
 def _balance_chart_request(dashboard_sheet_id: int, anchor_row: int) -> dict:
-    domain = _range_source(dashboard_sheet_id, _BALANCE_START_ROW, _BALANCE_END_ROW, 0, 1)
-    series = _range_source(dashboard_sheet_id, _BALANCE_START_ROW, _BALANCE_END_ROW, 1, 2)
+    domain = _range_source(
+        dashboard_sheet_id, _BALANCE_START_ROW, _BALANCE_END_ROW, 0, 1
+    )
+    series = _range_source(
+        dashboard_sheet_id, _BALANCE_START_ROW, _BALANCE_END_ROW, 1, 2
+    )
     return {
         "addChart": {
             "chart": {
@@ -240,7 +248,11 @@ def _trend_chart_request(sheet_id: int, months_end_row: int) -> dict:
                 },
                 "position": {
                     "overlayPosition": {
-                        "anchorCell": {"sheetId": sheet_id, "rowIndex": 0, "columnIndex": 5}
+                        "anchorCell": {
+                            "sheetId": sheet_id,
+                            "rowIndex": 0,
+                            "columnIndex": 5,
+                        }
                     }
                 },
             }
@@ -273,7 +285,9 @@ class SheetsRepository:
 
         existing = {ws.title for ws in self._spreadsheet.worksheets()}
         if DASHBOARD_SHEET not in existing:
-            dashboard = self._spreadsheet.add_worksheet(DASHBOARD_SHEET, rows=50, cols=10)
+            dashboard = self._spreadsheet.add_worksheet(
+                DASHBOARD_SHEET, rows=50, cols=10
+            )
             self._create_dashboard(dashboard)
         else:
             # Recover from a previous run that created the tab but left it
@@ -307,7 +321,11 @@ class SheetsRepository:
         grouped: dict[tuple[int, int], list[list]] = defaultdict(list)
         for record in records:
             tanggal = _parse_tanggal(str(record.get("Tanggal", "")))
-            key = (tanggal.year, tanggal.month) if tanggal else (fallback_year, fallback_month)
+            key = (
+                (tanggal.year, tanggal.month)
+                if tanggal
+                else (fallback_year, fallback_month)
+            )
             grouped[key].append(_row_from_record(record))
 
         for (year, month), rows in sorted(grouped.items()):
@@ -322,7 +340,9 @@ class SheetsRepository:
             len(grouped),
         )
 
-    def _ensure_month_sheet(self, year: int, month: int) -> tuple[gspread.Worksheet, bool]:
+    def _ensure_month_sheet(
+        self, year: int, month: int
+    ) -> tuple[gspread.Worksheet, bool]:
         """Returns (worksheet, created) — created is True the first time
         this month's tab is made, so callers can decide whether the
         Rekap Tahunan tab needs a new row."""
@@ -344,7 +364,10 @@ class SheetsRepository:
         if self._spreadsheet.locale == "en_US":
             return
         request = {
-            "updateSpreadsheetProperties": {"properties": {"locale": "en_US"}, "fields": "locale"}
+            "updateSpreadsheetProperties": {
+                "properties": {"locale": "en_US"},
+                "fields": "locale",
+            }
         }
         self._sheets_api.spreadsheets().batchUpdate(
             spreadsheetId=self._spreadsheet_id, body={"requests": [request]}
@@ -353,11 +376,15 @@ class SheetsRepository:
     def append_expense(self, record: ExpenseRecord) -> None:
         now = now_wib()
         target_date = record.tanggal or now.date()
-        worksheet, created = self._ensure_month_sheet(target_date.year, target_date.month)
-        item_ringkas = ", ".join(f"{i.nama} x{i.qty:g}" for i in record.items) or record.merchant
+        worksheet, created = self._ensure_month_sheet(
+            target_date.year, target_date.month
+        )
+        item_ringkas = (
+            ", ".join(f"{i.nama} x{i.qty:g}" for i in record.items) or record.merchant
+        )
         row = [
             record.tanggal.isoformat() if record.tanggal else "",
-            now.strftime("%H:%M"),
+            record.waktu or now.strftime("%H:%M"),
             record.kategori,
             escape_formula_injection(record.merchant),
             escape_formula_injection(item_ringkas),
@@ -470,7 +497,9 @@ class SheetsRepository:
             try:
                 self._delete_existing_charts(worksheet.id)
             except Exception:
-                logger.warning("Gagal membersihkan chart Rekap Tahunan (non-fatal)", exc_info=True)
+                logger.warning(
+                    "Gagal membersihkan chart Rekap Tahunan (non-fatal)", exc_info=True
+                )
             return
 
         total_row = len(rows) + 1
@@ -495,7 +524,9 @@ class SheetsRepository:
                 spreadsheetId=self._spreadsheet_id, body={"requests": requests}
             ).execute()
         except Exception:
-            logger.warning("Gagal membuat chart Rekap Tahunan (non-fatal)", exc_info=True)
+            logger.warning(
+                "Gagal membuat chart Rekap Tahunan (non-fatal)", exc_info=True
+            )
 
     def _create_dashboard(self, worksheet) -> None:
         default_month = f"{now_wib().year:04d}-{now_wib().month:02d}"
@@ -519,8 +550,14 @@ class SheetsRepository:
             [
                 [""],
                 ["Ringkasan Bulan Terpilih"],
-                ["Pengeluaran", _dashboard_total_formula(TIPE_PENGELUARAN, include_blank=True)],
-                ["Pemasukan", _dashboard_total_formula(TIPE_PEMASUKAN, include_blank=False)],
+                [
+                    "Pengeluaran",
+                    _dashboard_total_formula(TIPE_PENGELUARAN, include_blank=True),
+                ],
+                [
+                    "Pemasukan",
+                    _dashboard_total_formula(TIPE_PEMASUKAN, include_blank=False),
+                ],
                 ["Saldo", "=B5-B4"],
                 [""],
                 ["Pemasukan vs Pengeluaran (Bulan Dipilih)"],

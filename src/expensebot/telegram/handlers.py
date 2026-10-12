@@ -14,6 +14,7 @@ import hashlib
 import logging
 
 from telegram import Update
+from telegram.error import NetworkError
 from telegram.ext import ContextTypes
 
 from expensebot.documents.converter import pdf_to_images, photo_to_images
@@ -80,6 +81,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     await update.message.reply_text(
         "Halo! Kirim foto struk atau file PDF — otomatis dicatat sebagai pengeluaran.\n"
+        "Transaksi dari email notifikasi mobile banking (Gmail) juga dicatat & "
+        "dilaporkan otomatis di sini.\n"
         f"{_REKAP_USAGE}."
     )
 
@@ -99,7 +102,9 @@ async def _extract_and_save(
     processing_msg = await update.message.reply_text("⏳ Membaca struk... 0%")
 
     try:
-        result = await _extract_expense_with_progress(llm_client, images, processing_msg)
+        result = await _extract_expense_with_progress(
+            llm_client, images, processing_msg
+        )
     except LLMUnavailableError:
         await processing_msg.edit_text(
             "❌ Tidak bisa menghubungi Ollama. Pastikan container Ollama jalan dan "
@@ -136,12 +141,19 @@ async def _extract_and_save(
         if record.dedupe_key and await asyncio.to_thread(
             sheets.find_by_dedupe_key, record.dedupe_key
         ):
-            await processing_msg.edit_text("⚠️ Transaksi ini sudah tercatat sebelumnya.")
+            await processing_msg.edit_text(
+                "⚠️ Transaksi ini sudah tercatat sebelumnya."
+            )
             return
 
         tanggal = record.tanggal or today_wib()
         drive_link = await asyncio.to_thread(
-            drive.upload_receipt, file_bytes, filename, mime_type, tanggal.year, tanggal.month
+            drive.upload_receipt,
+            file_bytes,
+            filename,
+            mime_type,
+            tanggal.year,
+            tanggal.month,
         )
         record = record.model_copy(update={"drive_link": drive_link})
         await asyncio.to_thread(sheets.append_expense, record)
@@ -154,15 +166,53 @@ async def _extract_and_save(
         )
         return
 
-    await processing_msg.edit_text(format_confirmation(record) + "\n\n✅ Tersimpan otomatis.")
+    await processing_msg.edit_text(
+        format_confirmation(record) + "\n\n✅ Tersimpan otomatis."
+    )
+
+
+_DOWNLOAD_ATTEMPTS = 3
+_DOWNLOAD_RETRY_DELAY_SECONDS = 2.0
+_DOWNLOAD_FAILED_MESSAGE = (
+    "❌ Gagal mengunduh file dari server Telegram (koneksi lambat/timeout). "
+    "File TIDAK diproses — coba kirim ulang sebentar lagi."
+)
+
+
+async def _download_media(media) -> bytes:
+    """getFile + download, retried on network timeouts — slow links (or a
+    TLS-inspecting proxy) make a single attempt flaky; raises the last
+    NetworkError if every attempt fails."""
+    delay = _DOWNLOAD_RETRY_DELAY_SECONDS
+    for attempt in range(1, _DOWNLOAD_ATTEMPTS + 1):
+        try:
+            telegram_file = await media.get_file()
+            return bytes(await telegram_file.download_as_bytearray())
+        except NetworkError:
+            if attempt == _DOWNLOAD_ATTEMPTS:
+                raise
+            logger.warning(
+                "Unduh file Telegram gagal (percobaan %d/%d), coba lagi dalam %.0f detik",
+                attempt,
+                _DOWNLOAD_ATTEMPTS,
+                delay,
+                exc_info=True,
+            )
+            await asyncio.sleep(delay)
+            delay *= 2
+    raise AssertionError("unreachable")  # loop always returns or raises above
 
 
 async def on_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not _is_allowed(update, context):
         return
     photo = update.message.photo[-1]
-    telegram_file = await photo.get_file()
-    file_bytes = bytes(await telegram_file.download_as_bytearray())
+    try:
+        file_bytes = await _download_media(photo)
+    except NetworkError:
+        logger.error("Gagal mengunduh foto dari Telegram", exc_info=True)
+        await update.message.reply_text(_DOWNLOAD_FAILED_MESSAGE)
+        return
     images = photo_to_images(file_bytes)
     await _extract_and_save(
         update, context, images, file_bytes, "image/jpeg", f"{photo.file_unique_id}.jpg"
@@ -177,8 +227,12 @@ async def on_document(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await update.message.reply_text("Hanya foto atau file PDF yang didukung.")
         return
 
-    telegram_file = await document.get_file()
-    file_bytes = bytes(await telegram_file.download_as_bytearray())
+    try:
+        file_bytes = await _download_media(document)
+    except NetworkError:
+        logger.error("Gagal mengunduh PDF dari Telegram", exc_info=True)
+        await update.message.reply_text(_DOWNLOAD_FAILED_MESSAGE)
+        return
     images = pdf_to_images(file_bytes)
     await _extract_and_save(
         update,
@@ -282,7 +336,9 @@ async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     lands here instead of silently vanishing into the logs — the user
     always gets a clear reply, whatever broke (Ollama, Google, or
     anything else)."""
-    logger.error("Unhandled exception while processing an update", exc_info=context.error)
+    logger.error(
+        "Unhandled exception while processing an update", exc_info=context.error
+    )
 
     if isinstance(update, Update) and update.effective_chat:
         error_name = type(context.error).__name__

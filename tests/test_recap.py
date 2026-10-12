@@ -44,7 +44,10 @@ def test_summarize_mingguan_mengelompokkan_per_kategori():
 def test_summarize_bulanan_mengabaikan_tanggal_tidak_valid():
     # Arrange
     today = dt.date(2026, 8, 19)
-    rows = [_row("", "Lain-lain / Tak Terduga", 10000), _row("not-a-date", "Lain-lain", 10000)]
+    rows = [
+        _row("", "Lain-lain / Tak Terduga", 10000),
+        _row("not-a-date", "Lain-lain", 10000),
+    ]
 
     # Act
     result = summarize(rows, "bulanan", today=today)
@@ -101,7 +104,12 @@ def test_summarize_tahunan_menyaring_hanya_tahun_yang_diminta():
         _rekap_row("2025-12", 1000000, 500000),
         _rekap_row("2026-08", 9121597, 13091935),
         _rekap_row("2026-09", 3509900, 0),
-        {"Bulan": "Total", "Pemasukan": 12631497, "Pengeluaran": 13091935, "Saldo": -460438},
+        {
+            "Bulan": "Total",
+            "Pemasukan": 12631497,
+            "Pengeluaran": 13091935,
+            "Saldo": -460438,
+        },
     ]
 
     # Act
@@ -128,7 +136,14 @@ def test_summarize_tahunan_tahun_kosong_menghasilkan_nol():
 
 def test_summarize_tahunan_menerima_angka_string_dari_sheet():
     # Arrange — nilai dari Google Sheets kadang datang sebagai string.
-    rows = [{"Bulan": "2026-01", "Pemasukan": "500000", "Pengeluaran": "200000", "Saldo": "300000"}]
+    rows = [
+        {
+            "Bulan": "2026-01",
+            "Pemasukan": "500000",
+            "Pengeluaran": "200000",
+            "Saldo": "300000",
+        }
+    ]
 
     # Act
     result = summarize_tahunan(rows, 2026)

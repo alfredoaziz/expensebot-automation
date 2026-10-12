@@ -11,9 +11,14 @@ from google.oauth2.credentials import Credentials
 
 logger = logging.getLogger(__name__)
 
+# Read-only on purpose: the bot only needs to read bank notification
+# emails — it never sends, labels, or deletes anything in Gmail.
+GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
+
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive",
+    GMAIL_SCOPE,
 ]
 
 
@@ -29,11 +34,19 @@ def load_credentials(credentials_dir: str) -> Credentials:
             "sekali di host untuk membuatnya."
         )
 
-    creds = Credentials.from_authorized_user_file(str(token_path), SCOPES)
+    # No scopes override: refresh with exactly what was granted. Forcing
+    # SCOPES here would make Google reject the refresh (invalid_scope) for a
+    # token authorized before the Gmail scope existed — the bot must keep
+    # working on Sheets/Drive until the user re-runs the authorize script.
+    creds = Credentials.from_authorized_user_file(str(token_path))
     if creds.expired and creds.refresh_token:
         creds.refresh(Request())
         _try_persist_refreshed_token(token_path, creds)
     return creds
+
+
+def has_scope(creds: Credentials, scope: str) -> bool:
+    return scope in (creds.scopes or [])
 
 
 def _try_persist_refreshed_token(token_path: Path, creds: Credentials) -> None:

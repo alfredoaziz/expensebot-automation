@@ -9,6 +9,22 @@ USER_PROMPT = "Ekstrak data transaksi dari struk berikut."
 
 RETRY_PROMPT = "Balas HANYA JSON valid sesuai skema, tanpa teks lain."
 
+EMAIL_USER_PROMPT = (
+    "Berikut isi email notifikasi transaksi dari bank/e-wallet (bukan gambar). "
+    "Ekstrak data transaksinya. Jika email ini promo/iklan/e-statement dan bukan "
+    "notifikasi satu transaksi, kembalikan valid=false.\n\n"
+)
+
+
+def build_category_prompt(kategori: list[str]) -> str:
+    daftar = ", ".join(f'"{k}"' for k in kategori)
+    return f"""\
+Anda mengklasifikasikan SATU transaksi keuangan pribadi ke tepat satu
+kategori dari daftar berikut: [{daftar}].
+Transaksi berupa TOP UP atau pembayaran ke Shopee, ShopeePay, GoPay, atau
+Tokopedia masuk "E-commerce" (jika ada di daftar).
+Balas HANYA nama kategori persis seperti di daftar, tanpa teks lain."""
+
 
 def build_system_prompt(account_holder_name: str = "") -> str:
     rekening_rule = ""

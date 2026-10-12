@@ -5,7 +5,11 @@ import httpx
 import pytest
 from openai import APIConnectionError
 
-from expensebot.llm.client import ExtractionFailedError, LLMUnavailableError, OllamaClient
+from expensebot.llm.client import (
+    ExtractionFailedError,
+    LLMUnavailableError,
+    OllamaClient,
+)
 
 
 def _fake_response(content: str):
@@ -31,7 +35,9 @@ class _UnreachableCompletions:
 
 
 def _client_with_replies(replies: list[str]) -> tuple[OllamaClient, _FakeCompletions]:
-    client = OllamaClient(base_url="http://ollama:11434/v1", api_key="ollama", model="test-model")
+    client = OllamaClient(
+        base_url="http://ollama:11434/v1", api_key="ollama", model="test-model"
+    )
     fake_completions = _FakeCompletions(replies)
     client._client.chat.completions = fake_completions
     return client, fake_completions
@@ -39,7 +45,12 @@ def _client_with_replies(replies: list[str]) -> tuple[OllamaClient, _FakeComplet
 
 def test_extract_expense_mem_parsing_json_valid():
     # Arrange
-    payload = {"valid": True, "merchant": "Toko A", "kategori": "Lainnya", "total": 1000}
+    payload = {
+        "valid": True,
+        "merchant": "Toko A",
+        "kategori": "Lainnya",
+        "total": 1000,
+    }
     client, fake = _client_with_replies([json.dumps(payload)])
 
     # Act
@@ -52,7 +63,12 @@ def test_extract_expense_mem_parsing_json_valid():
 
 def test_extract_expense_strip_markdown_code_fence():
     # Arrange
-    payload = {"valid": True, "merchant": "Toko B", "kategori": "Lainnya", "total": 2000}
+    payload = {
+        "valid": True,
+        "merchant": "Toko B",
+        "kategori": "Lainnya",
+        "total": 2000,
+    }
     fenced = f"```json\n{json.dumps(payload)}\n```"
     client, _ = _client_with_replies([fenced])
 
@@ -65,7 +81,12 @@ def test_extract_expense_strip_markdown_code_fence():
 
 def test_extract_expense_retry_sekali_lalu_berhasil():
     # Arrange
-    payload = {"valid": True, "merchant": "Toko C", "kategori": "Lainnya", "total": 3000}
+    payload = {
+        "valid": True,
+        "merchant": "Toko C",
+        "kategori": "Lainnya",
+        "total": 3000,
+    }
     client, fake = _client_with_replies(["bukan json", json.dumps(payload)])
 
     # Act
@@ -85,9 +106,43 @@ def test_extract_expense_gagal_setelah_retry_raise_error():
         client.extract_expense([b"fake-image-bytes"])
 
 
+def test_categorize_mengembalikan_kategori_dari_daftar():
+    client, _ = _client_with_replies(['"Kesehatan & Kebersihan Diri".'])
+
+    assert (
+        client.categorize("Pengeluaran", "QRIS: KLINIK GIGI")
+        == "Kesehatan & Kebersihan Diri"
+    )
+
+
+def test_categorize_balasan_aneh_jatuh_ke_kategori_default():
+    client, _ = _client_with_replies(["entahlah"])
+
+    assert client.categorize("Pengeluaran", "x") == "Lain-lain / Tak Terduga"
+    client2, _ = _client_with_replies(["bukan kategori"])
+    assert client2.categorize("Pemasukan", "x") == "Pemasukan Lainnya"
+
+
+def test_extract_expense_from_text_memakai_jalur_ekstraksi_yang_sama():
+    payload = {
+        "valid": True,
+        "merchant": "Bank Baru",
+        "tipe": "Pemasukan",
+        "total": 5000,
+    }
+    client, fake = _client_with_replies([json.dumps(payload)])
+
+    result = client.extract_expense_from_text("Dana masuk Rp5.000")
+
+    assert result.merchant == "Bank Baru"
+    assert fake.calls == 1
+
+
 def test_extract_expense_ollama_tidak_terhubung_raise_llm_unavailable():
     # Arrange
-    client = OllamaClient(base_url="http://ollama:11434/v1", api_key="ollama", model="test-model")
+    client = OllamaClient(
+        base_url="http://ollama:11434/v1", api_key="ollama", model="test-model"
+    )
     client._client.chat.completions = _UnreachableCompletions()
 
     # Act / Assert

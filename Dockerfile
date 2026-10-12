@@ -25,7 +25,10 @@ RUN pip install --no-cache-dir -r requirements.txt \
 COPY src/ ./src/
 COPY scripts/ ./scripts/
 
-RUN mkdir -p /app/credentials && chown -R app:app /app
+# /app/data holds the Gmail "already processed" state (named volume in
+# docker-compose.yml, so it survives rebuilds); owned by app so the bot
+# can write it.
+RUN mkdir -p /app/credentials /app/data && chown -R app:app /app
 
 USER app
 
